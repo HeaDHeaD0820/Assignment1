@@ -1,8 +1,12 @@
+import java.awt.image.AreaAveragingScaleFilter;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  *
@@ -11,6 +15,52 @@ import java.util.*;
  * based on this demo, or implement it in a different way.
  */
 public class OnlineCoursesAnalyzer {
+
+    public static void main(String[] args) {
+        OnlineCoursesAnalyzer myAnalyzer=new OnlineCoursesAnalyzer("src/main/resources/local.csv");
+        // 1
+//        System.out.println(mapToString(myAnalyzer.getPtcpCountByInst()));
+        //2
+//        System.out.println(mapToString(myAnalyzer.getPtcpCountByInstAndSubject()));
+        //3
+//        System.out.println(mapToString(myAnalyzer.getCourseListOfInstructor()));
+        //4
+//        System.out.println(listToString(myAnalyzer.getCourses(10,"hours")));
+//        System.out.println(listToString(myAnalyzer.getCourses(15,"participants")));
+
+        //5
+        System.out.println(listToString(myAnalyzer.searchCourses("computer",20.0,700)));
+        //6
+//        System.out.println(mapToString(myAnalyzer.getCourseListOfInstructor()));
+
+    }
+    // NEED TO BE REMOVED BELOW
+
+    static <K, V> String mapToString(Object obj) {
+        Map<K, V> map = (Map<K, V>) obj;
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<K, V> entry : map.entrySet()) {
+            sb.append(entry.getKey());
+            sb.append(" == ");
+            sb.append(entry.getValue());
+            sb.append("\n");
+        }
+        if (sb.length() == 0) return "";
+        return sb.substring(0, sb.length() - 1).strip();
+    }
+
+    static String listToString(Object obj) {
+        List<String> list = (List<String>) obj;
+        StringBuilder sb = new StringBuilder();
+        for (String s : list) {
+            sb.append(s);
+            sb.append("\n");
+        }
+        if (sb.length() == 0) return "";
+        return sb.substring(0, sb.length() - 1).strip();
+    }
+
+    //// NEED TO BE REMOVED ABOVE
 
     List<Course> courses = new ArrayList<>();
 
@@ -46,34 +96,97 @@ public class OnlineCoursesAnalyzer {
 
     //1
     public Map<String, Integer> getPtcpCountByInst() {
-        return null;
+        Stream<Course> stream = this.courses.stream();
+        Map<String, Integer> result = stream.collect(
+                Collectors.groupingBy(course->course.institution, Collectors.summingInt(course->course.participants)));
+        return result;
     }
 
     //2
     public Map<String, Integer> getPtcpCountByInstAndSubject() {
-        return null;
+        Stream<Course> stream = this.courses.stream();
+        Map<String, Integer> map = stream.collect(Collectors.groupingBy(course->course.institution+"-"+course.subject, Collectors.summingInt(course->course.participants)));
+        Stream<Map.Entry<String,Integer>> mapStream = map.entrySet().stream();
+        Comparator<Map.Entry<String,Integer>> myComparator = (c1,c2) -> {
+            if(c1.getValue().equals(c2.getValue())){
+                return c1.getKey().compareTo(c2.getKey());
+            }else{
+                return -c1.getValue().compareTo(c2.getValue());
+            }
+        };
+        LinkedHashMap<String, Integer> result = mapStream.sorted(myComparator).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (v1, v2)->v1, LinkedHashMap::new));
+        return result;
     }
 
     //3
     public Map<String, List<List<String>>> getCourseListOfInstructor() {
-        return null;
+        Stream<Course> stream = this.courses.stream();
+        // Get Instructor Set
+        Set<String> instructors_set = new HashSet<>();
+        stream.forEach(course -> {
+            List<String> instructor_list = Arrays.asList(course.instructors.split(", "));
+            instructors_set.addAll(instructor_list);
+        });
+        // instructor -> courses
+        // for each instructor, check each course to see if the instructors(split) include the instructor, then add the course or not
+        Map<String, List<Course>> instructorToCourses = instructors_set.stream()
+                .collect(Collectors.toMap(
+                        Function.identity(),
+                        cur_instructor -> this.courses.stream().filter(course -> Arrays.asList(course.instructors.split(", ")).contains(cur_instructor)).collect(Collectors.toList())
+                ));
+        // instructor -> [ [single_courses][coop_courses] ]
+        Map<String, List<List<String>>> instructorToCoursesInTwoList = instructorToCourses.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> {
+                            List<String> single_courses = instructorToCourses.get(e.getKey()).stream().filter(course->course.instructors.split(", ").length==1).map(course->course.title).distinct().sorted().toList();//.stream().filter(course -> );
+                            List<String> coop_courses = instructorToCourses.get(e.getKey()).stream().filter(course->course.instructors.split(", ").length>1).map(course->course.title).distinct().sorted().toList();;
+                            return Arrays.asList(single_courses,coop_courses);
+                        }
+                ));
+        return instructorToCoursesInTwoList;
     }
-
     //4
     public List<String> getCourses(int topK, String by) {
-        return null;
+        Stream<Course> stream = this.courses.stream();
+        List<String> result = null;
+        Comparator<Course> myComparator = null;
+        if(by.equals("hours")){
+            myComparator = (c1,c2) -> {
+                if(c1.totalHours > c2.totalHours){
+                    return -1;
+                }else if(c1.totalHours < c2.totalHours){
+                    return 1;
+                }
+                return 0;
+            };
+        }
+        else if(by.equals("participants")){
+            myComparator = (c1,c2) -> {
+                if(c1.participants > c2.participants){
+                    return -1;
+                }else if(c1.participants < c2.participants){
+                    return 1;
+                }
+                return 0;
+            };
+        }
+        result = stream.sorted(myComparator).map(course->course.title).distinct().limit(topK).toList();
+        return result;
     }
-
     //5
     public List<String> searchCourses(String courseSubject, double percentAudited, double totalCourseHours) {
-        return null;
+        Stream<Course> stream = this.courses.stream();
+        List<String> result = stream.filter(course -> course.percentAudited>=percentAudited && course.totalHours<=totalCourseHours
+        && course.subject.toLowerCase().contains(courseSubject.toLowerCase())).map(course -> course.title).sorted().distinct().toList();
+        return result;
     }
 
     //6
     public List<String> recommendCourses(int age, int gender, int isBachelorOrHigher) {
+        List<String> result = null;
         return null;
     }
-
 }
 
 class Course {

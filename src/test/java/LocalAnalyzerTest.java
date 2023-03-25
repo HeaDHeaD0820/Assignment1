@@ -106,6 +106,8 @@ public class LocalAnalyzerTest {
             String expected = Files.readString(Paths.get("resources", "local_answer", "Q1.txt"),
                             StandardCharsets.UTF_8)
                     .replace("\r", "").strip();
+            System.out.println(expected);
+            System.out.println(mapToString(res));
             assertEquals(expected, mapToString(res));
         } catch (NoSuchMethodException | InvocationTargetException |
                  IllegalAccessException | IOException e) {
