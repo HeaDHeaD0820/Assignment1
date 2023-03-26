@@ -1,4 +1,3 @@
-import java.awt.image.AreaAveragingScaleFilter;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
@@ -15,53 +14,6 @@ import java.util.stream.Stream;
  * based on this demo, or implement it in a different way.
  */
 public class OnlineCoursesAnalyzer {
-
-    public static void main(String[] args) {
-        OnlineCoursesAnalyzer myAnalyzer=new OnlineCoursesAnalyzer("src/main/resources/local.csv");
-        // 1
-//        System.out.println(mapToString(myAnalyzer.getPtcpCountByInst()));
-        //2
-//        System.out.println(mapToString(myAnalyzer.getPtcpCountByInstAndSubject()));
-        //3
-//        System.out.println(mapToString(myAnalyzer.getCourseListOfInstructor()));
-        //4
-//        System.out.println(listToString(myAnalyzer.getCourses(10,"hours")));
-//        System.out.println(listToString(myAnalyzer.getCourses(15,"participants")));
-
-        //5
-        System.out.println(listToString(myAnalyzer.searchCourses("computer",20.0,700)));
-        //6
-//        System.out.println(mapToString(myAnalyzer.getCourseListOfInstructor()));
-
-    }
-    // NEED TO BE REMOVED BELOW
-
-    static <K, V> String mapToString(Object obj) {
-        Map<K, V> map = (Map<K, V>) obj;
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<K, V> entry : map.entrySet()) {
-            sb.append(entry.getKey());
-            sb.append(" == ");
-            sb.append(entry.getValue());
-            sb.append("\n");
-        }
-        if (sb.length() == 0) return "";
-        return sb.substring(0, sb.length() - 1).strip();
-    }
-
-    static String listToString(Object obj) {
-        List<String> list = (List<String>) obj;
-        StringBuilder sb = new StringBuilder();
-        for (String s : list) {
-            sb.append(s);
-            sb.append("\n");
-        }
-        if (sb.length() == 0) return "";
-        return sb.substring(0, sb.length() - 1).strip();
-    }
-
-    //// NEED TO BE REMOVED ABOVE
-
     List<Course> courses = new ArrayList<>();
 
     public OnlineCoursesAnalyzer(String datasetPath) {
@@ -146,6 +98,7 @@ public class OnlineCoursesAnalyzer {
                 ));
         return instructorToCoursesInTwoList;
     }
+
     //4
     public List<String> getCourses(int topK, String by) {
         Stream<Course> stream = this.courses.stream();
@@ -174,6 +127,7 @@ public class OnlineCoursesAnalyzer {
         result = stream.sorted(myComparator).map(course->course.title).distinct().limit(topK).toList();
         return result;
     }
+
     //5
     public List<String> searchCourses(String courseSubject, double percentAudited, double totalCourseHours) {
         Stream<Course> stream = this.courses.stream();
@@ -184,8 +138,35 @@ public class OnlineCoursesAnalyzer {
 
     //6
     public List<String> recommendCourses(int age, int gender, int isBachelorOrHigher) {
-        List<String> result = null;
-        return null;
+        Map<String, Double> map_to_age = courses.stream().collect(Collectors.groupingBy(course->course.number, Collectors.averagingDouble(course->course.medianAge)));
+        Map<String, Double> map_to_gen = courses.stream().collect(Collectors.groupingBy(course->course.number, Collectors.averagingDouble(course->course.percentMale)));
+        Map<String, Double> map_to_bach = courses.stream().collect(Collectors.groupingBy(course->course.number, Collectors.averagingDouble(course->course.percentDegree)));
+        // number to value
+        Map<String, Double> map_to_avg = map_to_age.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, course->{
+            String num = course.getKey();
+            Double avg_age = map_to_age.get(num);
+            Double avg_gen = map_to_gen.get(num);
+            Double avg_bach = map_to_bach.get(num);
+            double value = Math.pow((age - avg_age), 2) + Math.pow((gender*100 - avg_gen), 2) + Math.pow((isBachelorOrHigher*100 - avg_bach), 2);
+            return value;
+        }));
+        // Find number~title
+        Map<String, List<Course>> number_to_course = courses.stream().collect(Collectors.groupingBy(course->course.number));
+        Map<String, String> number_to_title = new HashMap<>();
+        for (Map.Entry<String, List<Course>> e : number_to_course.entrySet()) {
+            String new_key = e.getKey();
+            List<Course> courses = e.getValue();
+            Course latestCourse = Collections.max(courses, Comparator.comparing(course->course.launchDate));
+            number_to_title.put(new_key,latestCourse.title);
+        }
+        Map<String, Double> title_to_value = new HashMap<>();
+        for (Map.Entry<String, Double> e : map_to_avg.entrySet()) {
+            String new_key = number_to_title.get(e.getKey());
+            Double new_value = e.getValue();
+            title_to_value.put(new_key, new_value);
+        }
+        List<String> result = title_to_value.entrySet().stream().sorted(Comparator.comparing(Map.Entry::getValue)).limit(10).map(e->e.getKey()).toList();
+        return result;
     }
 }
 
