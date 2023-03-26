@@ -208,8 +208,16 @@ public class OnlineCoursesAnalyzer {
       Double newValue = e.getValue();
       titleToValue.put(newKey, newValue);
     }
+    Comparator<Map.Entry<String, Double>> myComparator = (e1, e2) -> {
+      if (e1.getValue().equals(e2.getValue())) {
+        return e1.getKey().compareTo(e2.getKey());
+      } else {
+        return e1.getValue().compareTo(e2.getValue());
+      }
+    };
+
     List<String> result = titleToValue.entrySet().stream()
-            .sorted(Comparator.comparing(Map.Entry::getValue))
+            .sorted(myComparator)
             .limit(10).map(e -> e.getKey()).toList();
     return result;
   }
